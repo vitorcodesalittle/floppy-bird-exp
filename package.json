@@ -1,0 +1,22 @@
+{
+  "name": "floppy-bird-exp",
+  "version": "1.0.0",
+  "description": "Experimentando Algoritmos genéticos e redes neurais criando um agente autônomo para o Flop Bird",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vlma98/floppy-bird-exp.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vlma98/floppy-bird-exp/issues"
+  },
+  "homepage": "https://github.com/vlma98/floppy-bird-exp#readme",
+  "dependencies": {
+    "webpack": "^4.43.0"
+  }
+}

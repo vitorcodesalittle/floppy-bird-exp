@@ -16,7 +16,7 @@ function Matrix(drow, dcol) {
   this.data = new Array(drow);
   this.data.fill(1, 0, drow)
   this.data = this.data.map( el => new Array(dcol) )
-  this.data = this.data.map(array => array.fill(1, 0, dcol).map(val => getRandomNumber()))
+  this.data = this.data.map(array => array.fill(1, 0, dcol).map(val => getNumberIn(-2, 2)))
 
   this.copyColumn = (matrix, columnIdx) => {
     if (this.n_rows === matrix.n_rows && columnIdx < matrix.n_cols) {
@@ -158,19 +158,27 @@ function Solution(NN) {
         const layerA = aNN.layers[i];
         const layerB = bNN.layers[i];
         const layer = new Layer(layerA.size, layerA.outputSize, layerA.activation);
+        let biasA = 0, biasB = 0;
         for (let j = 0; j < layerA.size; j++) {
           let pr = getRandomNumber();
           if (pr < 0.45) {
             layer.weights.copyColumn(layerA.weights, j)
+            biasA += 1
           } else if (pr < 0.9) {
             layer.weights.copyColumn(layerB.weights, j)
-          } else {
-            layer.weights.copyColumn(layerA.weights, j);
+            biasB += 1
+          } else { 
+            let m = layer.weights.data;
+            let w1 = 0.25, w2 = 0.25;
+            for (let k = 0; k < m.length; k++) {
+              m[k][j] = layerA.weights.data[k][j] * w1 + layerB.weights.data[k][j] * w2 + (1 - w1 - w2) * getNumberIn(-50, 50);
+            }
           }
         }
+        layer.bias = addMatrix(matrixElementWiseMultiplication(layerA.bias, biasA/(biasA+biasB)),matrixElementWiseMultiplication( layerB.bias, biasB/(biasA+biasB)))
         newLayers.push(layer);
     }
-    return new Solution(newLayers);
+    return new Solution(new NeuralNetwork(newLayers));
   }
 }
 
@@ -181,16 +189,15 @@ class GeneticAlgorithm {
     this.ellitism = ellitism;
     this.target = target;
   }
-  runIteration = (fitScores, generation = 0, threshold) => {
+  runIteration = (fitScores, generation = 0) => {
     this.population.forEach((p, i) => p.setFitness(fitScores[i]));
     this.population = this.population.sort((a, b) => {
       if (a.fitScore < b.fitScore) return -1
       else if (a.fitScore > b.fitScore) return 1;
       else return 1;
     })
-    console.log(fitScores);
-    console.log("Best solution is : ", this.population[this.populationSize-1].fitScore);    
-    if (this.population[this.populationSize-1].fitScore > threshold) {
+    console.log("Best solution is : ", this.population[this.populationSize-1]);    
+    if (this.population[this.populationSize-1].fitScore > this.target) {
       console.log("Best solution is : ", this.population[this.populationSize-1]);
       return;
     }
@@ -203,13 +210,12 @@ class GeneticAlgorithm {
     // Selection and Mutation
     for (let i = newPopulation.length; i <  this.populationSize; i = newPopulation.length) {
       
-      let randomIdx1 = Math.floor(getNumberIn(this.populationSize * 0.7, this.populationSize)); // random index from last 50% of elements in array of population
-      let randomIdx2 = Math.floor(getNumberIn(this.populationSize * 0.875, this.populationSize)); // random index from last 50% of elements in array of population
+      let randomIdx1 = Math.floor(getNumberIn(this.populationSize * 0.5, this.populationSize)); // random index from last 50% of elements in array of population
+      let randomIdx2 = Math.floor(getNumberIn(this.populationSize * 0.5, this.populationSize)); // random index from last 50% of elements in array of population
       let child = this.population[this.populationSize-1].mate(this.population[randomIdx2]);
-      console.log('Mating ', this.population[randomIdx1], 'with', this.population[randomIdx2]);
-      console.log('gives: ', child)
       newPopulation.push(child)
     }
+    this.population = newPopulation;
   }
 }
 
@@ -234,8 +240,8 @@ function drawCircle(x, y, r) {
   ctx.arc(x, y, r, 0, 2*Math.PI);
 }
 
-function getRandomGapHeight(canGap, height, offset=250) {
-  return offset + Math.random() * (height-2*offset);
+function getRandomGapHeight(canGap, height, offset=100) {
+  return offset + getNumberIn(0.1, 0.5) * height;
 }
 
 function collided(birds, cans) {
@@ -255,11 +261,11 @@ function collided(birds, cans) {
   })
 }
 
-let N = 30;
+let N = 60;
 let fitness = new Array(N).fill(0, 0, N);
+let g = 0; // generation
 function start(GA) {
   const populationSize = GA.populationSize
-  console.log('Population length is: ', GA.population.length);
 
   let birds = new Array(populationSize).fill({ x: 100, y: height/2, vy: 0 }, 0, populationSize)
   birds = birds.map((b,i) => ({...b, y: b.y - i}))
@@ -278,7 +284,6 @@ function start(GA) {
   const vx = -1.0;
   let t = 0;
   let over = false;
-  console.log('Starting: ', birds, cans, fitness)
   const interval = setInterval(() => {
     // calculate if colisions
     let collisions = collided(birds, cans);
@@ -293,9 +298,8 @@ function start(GA) {
     if (fitness.reduce((prev, val) => prev && val, 1)) {
       clearInterval(interval);
       over = true;
-      console.log('Jogo acabou');
-
-      GA.runIteration(fitness, 0,  200000);
+      console.log('Geneation #' + g, fitness);
+      GA.runIteration(fitness, g++);
       fitness.fill(0, 0, N);
       start(GA)
       return;
@@ -307,13 +311,14 @@ function start(GA) {
     let cmds = []
     birds.forEach((bird, i) => {
       if (bird.dead) {
+        bird.x += vx
         return;
       }
       bird.vy += gravity
       bird.y += bird.vy;
       let xCan = cans[0].x - bird.x
       let inputVector = new Matrix(4, 1);
-      inputVector.data = [[xCan], [height - bird.y], [bird.vy*13], [cans[0].center]];
+      inputVector.data = [[Math.max(0, xCan)], [bird.y], [bird.vy * 0.05], [cans[0].center - bird.y]];
       let command = GA.population[i].representation.feedFoward(inputVector);
       cmds.push(command.data[0][0])
       command = command.data[0][0];
@@ -329,6 +334,7 @@ function start(GA) {
         x: 900 + 0.5 * canWidth,
         center: getRandomGapHeight(canGap, height)
       })
+      t += 2000;
     }
 
     cans.forEach(c => {    
@@ -345,7 +351,7 @@ function start(GA) {
     })
     ctx.closePath();
 
-    ctx.fillStyle = 'red'
+    ctx.fillStyle = 'rgba(193, 35, 35, 0.5)'
     ctx.strokeStyle = '#003300'
     ctx.fill();
     ctx.stroke();
@@ -354,13 +360,12 @@ function start(GA) {
   }, 10)
 
 }
-let population = new Array(N).fill(1, 0, N).map( _ => new Solution(new NeuralNetwork([new Layer(4, 5, relu), new Layer(5, 1, sigmoid)])))
-const GA = new GeneticAlgorithm(N, population, 0.1, 3000);
+let population = new Array(N).fill(1, 0, N).map( _ => new Solution(new NeuralNetwork([new Layer(4, 5, sigmoid), new Layer(5, 12, relu),  new Layer(12, 1, sigmoid)])))
+const GA = new GeneticAlgorithm(N, population, 0.2, 300000);
 
 // start(GA);
 
 start(GA);
-console.log(fitness);
 
 // let m0 = new Matrix(4, 1);
 // let m1 = new Matrix(6, 4);
